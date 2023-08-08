@@ -19,6 +19,8 @@ class Graph:
         self.update_speed_ms = 50
         self.window_size = 4
         self.num_points = self.window_size * self.sampling_rate
+        self.eeg_channels = BoardShim.get_eeg_channels(self.board_id)
+        self.accel_channels = BoardShim.get_accel_channels(self.board_id)
 
         self.app = QtGui.QApplication([])
         self.win = pg.GraphicsWindow(title='Mindrove Plot',size=(800, 600))
@@ -27,6 +29,7 @@ class Graph:
         self._init_timeseries()
         self._init_psd()
         self._init_band_plot()
+        self._init_accel()
 
         timer = QtCore.QTimer()
         timer.timeout.connect(self.update)
@@ -72,6 +75,19 @@ class Graph:
             psd_curve.setDownsampling(auto=True, method='mean', ds=3)
             self.psd_curves.append(psd_curve)
 
+    def _init_accel(self):
+        self.accel_plot = self.win.addPlot(row=0,col=1, rowspan=len(self.exg_channels)//2)
+        self.accel_plot.showAxis('left', False)
+        self.accel_plot.setMenuEnabled('left', False)
+        self.accel_plot.setTitle('Accel Plot')
+        self.accel_plot.setLogMode(False, True)
+        self.accel_curves = list()
+        self.accel_size = DataFilter.get_nearest_power_of_two(self.sampling_rate)
+        for i in range(len(self.exg_channels)):
+            accel_curve = self.accel_plot.plot(pen=self.pens[i % len(self.pens)])
+            accel_curve.setDownsampling(auto=True, method='mean', ds=3)
+            self.accel_curves.append(accel_curve)
+
     def _init_band_plot(self):
         self.band_plot = self.win.addPlot(row=len(self.exg_channels)//2, col=1, rowspan=len(self.exg_channels)//2)
         self.band_plot.showAxis('left', False)
@@ -103,6 +119,13 @@ class Graph:
                                    WindowFunctions.BLACKMAN_HARRIS.value)
                 lim = min(70, len(psd_data[0]))
                 self.psd_curves[count].setData(psd_data[1][0:lim].tolist(), psd_data[0][0:lim].tolist())
+                
+                # plot accel_data           ## HERE
+                accel_data = DataFilter.get_psd_welch(data[channel], self.accel_size, self.accel_size // 2, self.sampling_rate,
+                                   WindowFunctions.BLACKMAN_HARRIS.value)
+                lim = min(70, len(accel_data[0]))
+                self.accel_curves[count].setData(accel_data[1][0:lim].tolist(), accel_data[0][0:lim].tolist())
+                
                 # plot bands
                 avg_bands[0] = avg_bands[0] + DataFilter.get_band_power(psd_data, 1.0, 4.0)
                 avg_bands[1] = avg_bands[1] + DataFilter.get_band_power(psd_data, 4.0, 8.0)
@@ -117,15 +140,13 @@ class Graph:
 
 
 def main():
-    print("ABC133")
-    print("abababab")
     BoardShim.enable_dev_board_logger()
     logging.basicConfig(level=logging.DEBUG)
 
     params = MindRoveInputParams()
 
     try:
-        board_shim = BoardShim(BoardIds.MINDROVE_WIFI_BOARD, params)
+        board_shim = BoardShim(BoardIds.SYNTHETIC_BOARD, params) # INPUT .MINDROVE_WIFI_BOARD for real device
         board_shim.prepare_session()
         board_shim.start_stream()
         Graph(board_shim)
@@ -138,4 +159,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print("aaa")
     main()
